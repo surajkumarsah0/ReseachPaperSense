@@ -3,5 +3,6 @@ uvicorn[standard]
 pydantic-settings
 pydantic
 sqlalchemy
+python-dotenv
 psycopg2-binary
 passlib[bcrypt]
