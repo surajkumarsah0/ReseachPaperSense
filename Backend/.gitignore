@@ -1,0 +1,22 @@
+# 1. Python Virtual Environment
+venv/
+.venv/
+env/
+
+# 2. Python Cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# 3. Environment variables (Security Secrets)
+.env
+
+# 4. Local Databases
+*.sqlite3
+*.db
+
+# 5. IDE Specific setups (Optional but good)
+.vscode/
+.idea/
