@@ -5,7 +5,7 @@ from passlib.context import CryptContext # Password hash garne tool (Node ko Bcr
 
 from app.database.session import SessionLocal, Base, engine
 from app.models.user import User as UserModel
-from app.schemas.user import UserCreatePlain, UserResponse,UserLoginSchema,TokenResponse
+from app.schemas.user import UserCreatePlain, UserResponse,UserLoginSchema,TokenResponse,TokenRefreshRequest,TokenRefreshResponse
 
 # token 
 from app.core.security import create_access_token,create_refresh_token
@@ -13,6 +13,14 @@ from app.core.security import create_access_token,create_refresh_token
 # hashing things
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
+from dotenv import load_dotenv
+import os
+import jwt
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = "HS256"
 
 # Initialize PasswordHash with the modern Argon2 algorithm
 password_hash = PasswordHash((Argon2Hasher(),))
@@ -83,7 +91,7 @@ def login_user(user_in: UserLoginSchema, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User"
+            detail="User not found please register first."
         )
     
     # 2. Cryptographic matching validation checks
@@ -107,3 +115,49 @@ def login_user(user_in: UserLoginSchema, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": user
     }
+
+
+# token refresh route
+@router.post("/refresh", response_model=TokenRefreshResponse)
+def refresh_access_token(payload_in: TokenRefreshRequest):
+   
+    try:
+        # 1. Cryptographic Signature decryption checks (Verifying token validity)
+        payload = jwt.decode(payload_in.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        # 2. Strict Token Type Guard Protection Check
+        if payload.get("token_type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Yo token access type verification matching failed, sathi!"
+            )
+            
+        # 3. Extract Payload Metadata directly from signature parameters data matrix
+        user_id = payload.get("sub")
+        email = payload.get("email")
+        
+        if not user_id or not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token payload attributes validation tracking corrupted!"
+            )
+            
+        # 4. Generate Fresh New Access Token (Database trip completely saved for high-speed performance)
+        new_token_payload = {"sub": user_id, "email": email}
+        new_access_token = create_access_token(data=new_token_payload)
+        
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer"
+        }
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expire bhaisakyo sathi! Re-login garna parcha."
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token template format signature matching parameters error!"
+        )
