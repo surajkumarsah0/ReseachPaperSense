@@ -5,7 +5,10 @@ from passlib.context import CryptContext # Password hash garne tool (Node ko Bcr
 
 from app.database.session import SessionLocal, Base, engine
 from app.models.user import User as UserModel
-from app.schemas.user import UserCreatePlain, UserResponse,UserLoginSchema
+from app.schemas.user import UserCreatePlain, UserResponse,UserLoginSchema,TokenResponse
+
+# token 
+from app.core.security import create_access_token,create_refresh_token
 
 # hashing things
 from pwdlib import PasswordHash
@@ -70,25 +73,37 @@ def register_user(user_in: UserCreatePlain, db: Session = Depends(get_db)):
 
 
 # login route and logic
-@router.post('/login',response_model=UserResponse)
-def login_user(user_in:UserLoginSchema,db:Session=Depends(get_db)):
-    user=db.query(UserModel).filter(UserModel.email == user_in.email).first()
-    # print(">>>>>>>>",{user})
+# app/api/v1/endpoints/auth.py inside login_user endpoint
+
+@router.post("/login", response_model=TokenResponse)
+def login_user(user_in: UserLoginSchema, db: Session = Depends(get_db)):
+    
+    # 1. Identity credentials parsing verification logic checkpoint
+    user = db.query(UserModel).filter(UserModel.email == user_in.email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not Found, Please register First." # Security ko lagi generic error message
+            detail="User"
         )
-    # 2. Cryptographic Password Match: Argon2 verification engine run gareko
-    # Node ko await argon2.verify(user.hashed_password, plain_password) jastai ho yo
-    is_password_correct = password_hash.verify(user_in.password, user.hashed_password)
     
+    # 2. Cryptographic matching validation checks
+    is_password_correct = password_hash.verify(user_in.password, user.hashed_password)
     if not is_password_correct:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Wrong Email or Password !"
+            detail="Email athawa Password milena sathi!"
         )
         
-    # 3. Validation passed bhaye direct authenticated user profile schema masking state data return
-    return user
- 
+    # 3. Secure Payload creation setup
+    token_payload = {"sub": str(user.id), "email": user.email}
+    
+    jwt_access_token = create_access_token(data=token_payload)
+    jwt_refresh_token = create_refresh_token(data=token_payload) # 👈 Refresh token built here!
+    
+    # 5. Delivery structured payload packaging return
+    return {
+        "access_token": jwt_access_token,
+        "refresh_token": jwt_refresh_token,
+        "token_type": "bearer",
+        "user": user
+    }
